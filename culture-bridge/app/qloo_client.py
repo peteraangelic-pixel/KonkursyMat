@@ -206,21 +206,57 @@ class QlooClient:
         return out
 
     @staticmethod
+    def item_id(item: dict[str, Any]) -> str:
+        """Identyfikator encji.
+
+        Udokumentowana odpowiedź Insights używa ``entity_id`` (np.
+        ``"entity_id": "F0D354AA-BA7E-49D2-8ABA-9A8250F5C852"``), nie ``id``.
+        Bez tego ``qloo_id`` byłby pusty, a przycisk „to nie to” nigdy by się
+        nie pojawił — bo wykluczanie nie miałoby czego wykluczyć.
+        """
+        return str(item.get("entity_id") or item.get("id") or item.get("_id") or "")
+
+    @staticmethod
     def item_name(item: dict[str, Any]) -> str:
         return str(item.get("name") or (item.get("properties") or {}).get("name") or "bez nazwy")
 
     @staticmethod
     def item_affinity(item: dict[str, Any]) -> float:
+        """Wynik dopasowania.
+
+        Kolejność jest celowa: najpierw pola afinacji, a ``query.affinity``
+        jako miejsce, w którym Insights API trzyma ranking. ``popularity``
+        NIE jest tu używane — to inna miara i podstawianie jej pod afinację
+        pokazywałoby użytkownikowi nieprawdę.
+        """
         for key in ("affinity", "score", "affinity_score"):
             value = item.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
+        query = item.get("query") or {}
+        for key in ("affinity", "score"):
+            value = query.get(key)
             if isinstance(value, (int, float)):
                 return float(value)
         return 0.0
 
     @staticmethod
     def item_tags(item: dict[str, Any]) -> list[str]:
-        tags = item.get("tags") or []
-        return [str(t) for t in tags][:8] if isinstance(tags, list) else []
+        """Tagi jako czytelne nazwy.
+
+        W odpowiedzi Qloo tag to obiekt ``{"id", "name", "type"}``, nie napis.
+        Samo ``str(t)`` wypisałoby do UI cały słownik.
+        """
+        tags = item.get("tags")
+        if not isinstance(tags, list):
+            return []
+        out: list[str] = []
+        for tag in tags[:8]:
+            if isinstance(tag, dict):
+                out.append(str(tag.get("name") or tag.get("id") or "").strip())
+            elif isinstance(tag, str):
+                out.append(tag)
+        return [t for t in out if t]
 
     @staticmethod
     def item_description(item: dict[str, Any]) -> str:
@@ -229,9 +265,20 @@ class QlooClient:
 
     @staticmethod
     def item_image(item: dict[str, Any]) -> str | None:
+        """URL obrazka.
+
+        W odpowiedzi Qloo ``properties.image`` to obiekt ``{"url": ...}``,
+        więc ``str(image)`` dałby ``"{'url': 'https://...'}"`` jako src.
+        """
         props = item.get("properties") or {}
-        image = item.get("image") or props.get("image")
-        return str(image) if image else None
+        for candidate in (item.get("image"), props.get("image")):
+            if isinstance(candidate, dict):
+                url = candidate.get("url")
+                if url:
+                    return str(url)
+            elif isinstance(candidate, str) and candidate:
+                return candidate
+        return None
 
     @staticmethod
     def item_address(item: dict[str, Any]) -> str:

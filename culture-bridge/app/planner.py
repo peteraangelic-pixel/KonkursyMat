@@ -132,7 +132,7 @@ class Planner:
             why = "Brak danych o wyjaśnialności dla tej pozycji"
 
         return Recommendation(
-            qloo_id=str(item.get("id") or item.get("_id") or ""),
+            qloo_id=self.provider.item_id(item),
             name=self.provider.item_name(item),
             domain=domain,
             affinity=self.provider.item_affinity(item),

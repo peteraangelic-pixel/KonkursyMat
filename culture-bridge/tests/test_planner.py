@@ -55,6 +55,7 @@ class FakeProvider:
     # interpretacja — współdzielona z DemoProvider, żeby nie duplikować
     extract_items = staticmethod(DemoProvider.extract_items)
     explainability_for = staticmethod(DemoProvider.explainability_for)
+    item_id = staticmethod(DemoProvider.item_id)
     item_name = staticmethod(DemoProvider.item_name)
     item_affinity = staticmethod(DemoProvider.item_affinity)
     item_tags = staticmethod(DemoProvider.item_tags)

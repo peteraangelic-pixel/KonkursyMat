@@ -249,9 +249,78 @@ def test_item_helpers():
         "address": "ul. X",
         "properties": {"geocode": {"name": "Poznań", "country_code": "PL"}},
     }
+    assert QlooClient.item_id(item) == "p1"
     assert QlooClient.item_name(item) == "Bar"
     assert QlooClient.item_affinity(item) == 0.8
     assert QlooClient.item_tags(item) == ["urn:tag:a", "urn:tag:b"]
     assert QlooClient.item_description(item) == "opis"
     assert "Poznań" in QlooClient.item_address(item)
     assert QlooClient.item_image(item) is None
+
+
+# ------------------------------------- prawdziwy kształt odpowiedzi Qloo
+#
+# Fixture poniżej jest przepisany z udokumentowanego przykładu odpowiedzi
+# (docs.qloo.com/reference/basic-insights-use-case). Te testy pilnują, żeby
+# parser nie rozjechał się z API dopiero po włożeniu prawdziwego klucza.
+
+REAL_QLOO_ITEM = {
+    "name": "Everything Everywhere All at Once",
+    "entity_id": "F0D354AA-BA7E-49D2-8ABA-9A8250F5C852",
+    "type": "urn:entity",
+    "subtype": "urn:entity:movie",
+    "properties": {
+        "release_year": 2022,
+        "description": "A middle-aged Chinese immigrant is swept up into an insane adventure.",
+        "content_rating": "R",
+        "image": {"url": "https://staging.images.qloo.com/i/F0D354AA-420x-outside.jpg"},
+        "akas": [{"value": "Все завжди і водночас", "languages": ["uk"]}],
+    },
+    "popularity": 0.9984116946335868,
+    "tags": [
+        {"id": "urn:tag:keyword:media:multiverse", "name": "Multiverse", "type": "urn:tag:keyword:media"},
+        {"id": "urn:tag:streaming_service:media:neon_tv", "name": "Neon Tv", "type": "urn:tag:streaming_service:media"},
+    ],
+    "query": {"measurements": {"audience_growth": -0.04072975141723856}},
+    "disambiguation": "2022, Daniel Scheinert, Daniel Kwan",
+}
+
+REAL_QLOO_PAYLOAD = {"success": True, "results": {"entities": [REAL_QLOO_ITEM]}}
+
+
+def test_extract_items_z_prawdziwego_ksztaltu_odpowiedzi():
+    items = QlooClient.extract_items(REAL_QLOO_PAYLOAD)
+    assert len(items) == 1
+    assert items[0]["name"] == "Everything Everywhere All at Once"
+
+
+def test_identyfikator_bierze_sie_z_entity_id():
+    """API zwraca `entity_id`, nie `id`. Puste ID zabiłoby wykluczanie w UI."""
+    assert QlooClient.item_id(REAL_QLOO_ITEM) == "F0D354AA-BA7E-49D2-8ABA-9A8250F5C852"
+
+
+def test_tagi_zwracaja_nazwy_a_nie_slowniki():
+    """Tag w Qloo to obiekt {id,name,type}. `str(t)` wypisałby cały słownik do UI."""
+    tags = QlooClient.item_tags(REAL_QLOO_ITEM)
+    assert tags == ["Multiverse", "Neon Tv"]
+    assert all("{" not in t for t in tags), "do UI wyciekła repr słownika"
+
+
+def test_obrazek_zwraca_url_a_nie_repr_obiektu():
+    """`properties.image` to obiekt {"url": ...}, nie napis."""
+    url = QlooClient.item_image(REAL_QLOO_ITEM)
+    assert url == "https://staging.images.qloo.com/i/F0D354AA-420x-outside.jpg"
+    assert "{" not in (url or "")
+
+
+def test_popularity_nie_jest_podstawiane_pod_afinacje():
+    """`popularity` to inna miara. Podstawienie jej pokazałoby użytkownikowi nieprawdę."""
+    assert QlooClient.item_affinity(REAL_QLOO_ITEM) == 0.0
+
+    z_afinacja = dict(REAL_QLOO_ITEM, query={"affinity": 0.63})
+    assert QlooClient.item_affinity(z_afinacja) == 0.63
+
+
+def test_opis_bierze_sie_z_properties():
+    assert "middle-aged Chinese immigrant" in QlooClient.item_description(REAL_QLOO_ITEM)
+

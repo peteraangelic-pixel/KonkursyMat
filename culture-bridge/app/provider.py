@@ -35,6 +35,9 @@ class TasteProvider(Protocol):
     def explainability_for(item: dict[str, Any]) -> list[dict[str, Any]]: ...
 
     @staticmethod
+    def item_id(item: dict[str, Any]) -> str: ...
+
+    @staticmethod
     def item_name(item: dict[str, Any]) -> str: ...
 
     @staticmethod
@@ -264,6 +267,12 @@ class DemoProvider:
         ]
 
     @staticmethod
+    def item_id(item: dict[str, Any]) -> str:
+        # Fixture'y używają `id`, prawdziwe API `entity_id` — obsługujemy oba,
+        # żeby ścieżka kodu była wspólna dla trybu demo i produkcyjnego.
+        return str(item.get("entity_id") or item.get("id") or "")
+
+    @staticmethod
     def item_name(item: dict[str, Any]) -> str:
         return str(item.get("name") or "bez nazwy")
 
@@ -273,8 +282,16 @@ class DemoProvider:
 
     @staticmethod
     def item_tags(item: dict[str, Any]) -> list[str]:
-        tags = item.get("tags") or []
-        return [str(t) for t in tags][:8]
+        tags = item.get("tags")
+        if not isinstance(tags, list):
+            return []
+        out: list[str] = []
+        for tag in tags[:8]:
+            if isinstance(tag, dict):
+                out.append(str(tag.get("name") or tag.get("id") or "").strip())
+            elif isinstance(tag, str):
+                out.append(tag)
+        return [t for t in out if t]
 
     @staticmethod
     def item_description(item: dict[str, Any]) -> str:
