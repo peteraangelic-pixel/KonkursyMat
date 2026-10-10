@@ -72,7 +72,25 @@ w prawdziwym API, gdzie wynik wynika z sygnału.
 - `/recs` i `/recommendations` to endpointy legacy — nie używamy ich,
 - API **milczy** zamiast zgłosić błąd, gdy parametr nie pasuje do `filter.type`.
   Dlatego pusty wynik jest u nas traktowany jako sygnał diagnostyczny,
-  a klient nie wysyła żadnych nieudokumentowanych parametrów.
+  a klient nie wysyła żadnych nieudokumentowanych parametrów,
+- rozmiar wyniku to **`take`** (1–50, domyślnie 20), a paginacja przez `page`,
+- `/search` zwraca **404 „No results”** — to normalny wynik, nie awaria.
+
+### Kształt odpowiedzi Insights API
+
+Parser jest napisany pod udokumentowany przykład odpowiedzi
+(`docs.qloo.com/reference/basic-insights-use-case`), nie pod zgadywankę.
+Cztery rzeczy, które łatwo pomylić i które mamy pokryte testami:
+
+| Pole | Jak jest naprawdę | Pułapka |
+|---|---|---|
+| identyfikator | `entity_id` | nie `id` — puste ID zabija wykluczanie w UI |
+| `tags` | lista obiektów `{id, name, type}` | `str(t)` wypisuje do UI repr słownika |
+| `properties.image` | obiekt `{"url": ...}` | `str(image)` daje słownik jako `src` |
+| `popularity` | osobna miara | **nie** podstawiamy jej pod afinację |
+
+Testy w `tests/test_qloo_client.py` używają fixture'a przepisanego z tej
+dokumentacji, więc rozjazd z API wychodzi w testach, a nie dopiero na demo.
 
 ## Testy
 
