@@ -36,7 +36,7 @@ from .models import (
 )
 from .narrator import DeterministicNarrator, Narrator
 from .provider import TasteProvider
-from .qloo_client import QlooAuthError, QlooError
+from .qloo_client import QlooError, QlooFatalError
 
 DOMAIN_LABELS = {
     ENTITY_MOVIE: "Filmy i seriale",
@@ -84,9 +84,10 @@ class Planner:
 
         try:
             hits = self.provider.search_entities(anchor.name, types=search_types, take=3)
-        except QlooAuthError:
-            # Zły klucz dotyczy każdego zapytania — nie ma sensu udawać, że ta
-            # jedna kotwica się nie rozwiązała, i brnąć dalej z pustym planem.
+        except QlooFatalError:
+            # Zły klucz albo nieosiągalne API dotyczy każdego zapytania — nie ma
+            # sensu udawać, że ta jedna kotwica się nie rozwiązała, i brnąć
+            # dalej z pustym planem.
             raise
         except QlooError:
             return anchor
@@ -206,10 +207,11 @@ class Planner:
             try:
                 items = self._query_domain(request, domain, anchor_ids)
                 qloo_calls += 1
-            except QlooAuthError:
-                # 401/403 to błąd konfiguracji, nie brak danych dla tej domeny.
-                # Połknięty wyglądałby jak „pusty wynik", a pozostałe domeny
-                # padłyby z tej samej przyczyny — przerywamy i zgłaszamy 502.
+            except QlooFatalError:
+                # 401/403 albo nieosiągalne API to błąd konfiguracji, nie brak
+                # danych dla tej domeny. Połknięty wyglądałby jak „pusty wynik",
+                # a pozostałe domeny padłyby z tej samej przyczyny — przerywamy
+                # i zgłaszamy 502.
                 raise
             except QlooError as exc:
                 sections.append(DomainSection(domain=domain, label=label, items=[], note=str(exc)))

@@ -387,6 +387,92 @@ def test_api_plan_z_qloo_zglasza_bled_qloo_jako_502(qloo_transport, monkeypatch)
     assert response.json()["detail"]
 
 
+def test_api_plan_nieosiagalne_qloo_daje_502(monkeypatch):
+    """Awaria sieci / zły QLOO_BASE_URL to nie „brak danych dla tego miasta".
+
+    Połknięty błąd dawał HTTP 200 z zerem pozycji i ostrzeżeniem „brak
+    rozwiązanych kotwic", które wskazuje na użytkownika zamiast na konfigurację.
+    A dotyczy każdego zapytania — próba innej domeny nic by nie dała.
+    """
+    from fastapi.testclient import TestClient
+
+    from app import main as main_module
+
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    settings = Settings(qloo_api_key="test-key", qloo_base_url=BASE)
+    client = QlooClient(settings=settings, _transport=httpx.MockTransport(unreachable))
+    monkeypatch.setattr(main_module, "build_provider", lambda _s: (client, "qloo"))
+    monkeypatch.setenv("QLOO_API_KEY", "test-key")
+
+    response = TestClient(main_module.app).post(
+        "/api/plan",
+        json={
+            "origin": "Ukraina",
+            "destination": "Poznań",
+            "anchors": [{"name": "Okean Elzy", "kind": "artist"}],
+            "domains": ["urn:entity:movie"],
+        },
+    )
+    assert response.status_code == 502
+    assert "QLOO_BASE_URL" in response.json()["detail"]
+
+
+def test_blad_pojedynczej_domeny_nie_przerywa_calego_planu(qloo_transport, monkeypatch):
+    """Druga strona tej samej decyzji: błąd JEDNEJ domeny ma degradować, nie rwać planu."""
+    from fastapi.testclient import TestClient
+
+    from app import main as main_module
+
+    def selective(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        params = request.url.params
+        if path == "/search":
+            return httpx.Response(
+                200, json={"results": [qloo_entity("ART-001", "Okean Elzy", subtype="urn:entity:artist")]}
+            )
+        if path == "/v2/insights":
+            if params.get("filter.type") == "urn:entity:book":
+                return httpx.Response(400, json={"error": "unsupported filter.type"})
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "results": {
+                        "entities": [
+                            explainable(qloo_entity("ART-100", "DagaDana", subtype="urn:entity:artist", affinity=0.7), [])
+                        ]
+                    },
+                },
+            )
+        return httpx.Response(404, json={"error": "not found"})
+
+    settings = Settings(qloo_api_key="test-key", qloo_base_url=BASE)
+    client = QlooClient(settings=settings, _transport=httpx.MockTransport(selective))
+    monkeypatch.setattr(main_module, "build_provider", lambda _s: (client, "qloo"))
+    monkeypatch.setenv("QLOO_API_KEY", "test-key")
+
+    response = TestClient(main_module.app).post(
+        "/api/plan",
+        json={
+            "origin": "Ukraina",
+            "destination": "Poznań",
+            "anchors": [{"name": "Okean Elzy", "kind": "artist"}],
+            "domains": ["urn:entity:artist", "urn:entity:book"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    plan = response.json()
+    by_domain = {s["domain"]: s for s in plan["sections"]}
+
+    # Zepsuta domena dostała notatkę zamiast pozycji...
+    assert not by_domain["urn:entity:book"]["items"]
+    assert by_domain["urn:entity:book"]["note"]
+    # ...ale zdrowa domena normalnie działa.
+    assert by_domain["urn:entity:artist"]["items"]
+
+
 def test_nierozwiazana_kotwica(qloo_transport):
     """Kotwica, której /search nie znajduje (404), nie może wywalić planu."""
     settings = Settings(qloo_api_key="test-key", qloo_base_url=BASE)

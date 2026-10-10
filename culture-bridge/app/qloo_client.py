@@ -27,15 +27,23 @@ class QlooError(RuntimeError):
     """Błąd wywołania Qloo z komunikatem zrozumiałym dla człowieka."""
 
 
-class QlooAuthError(QlooError):
-    """Błąd konfiguracji (401/403), którego nie naprawi próba innej domeny.
+class QlooFatalError(QlooError):
+    """Błąd dotyczący KAŻDEGO zapytania — próba innej domeny go nie naprawi.
 
-    Planer połyka ``QlooError`` dla pojedynczej domeny, bo pusty lub odrzucony
-    wynik jednej domeny nie unieważnia pozostałych. Ale 401/403 dotyczy KAŻDEGO
-    zapytania — zły klucz albo zły ``QLOO_BASE_URL``. Połknięty dałby użytkownikowi
-    pusty plan bez przyczyny, co wygląda identycznie jak „brak danych dla tego
-    miasta". Dlatego ten wyjątek przerywa plan i wychodzi na zewnątrz jako 502.
+    Planer połyka zwykły ``QlooError`` dla pojedynczej domeny, bo pusty lub
+    odrzucony wynik jednej domeny nie unieważnia pozostałych. Błędy z tej
+    rodziny dotyczą całego wywołania, więc połknięte dałyby użytkownikowi pusty
+    plan bez przyczyny — co wygląda identycznie jak „brak danych dla tego
+    miasta". Dlatego przerywają plan i wychodzą na zewnątrz jako 502.
     """
+
+
+class QlooAuthError(QlooFatalError):
+    """401/403 — zły klucz albo klucz użyty z niewłaściwym hostem."""
+
+
+class QlooConnectionError(QlooFatalError):
+    """Sieć, DNS, timeout albo nieosiągalny ``QLOO_BASE_URL``."""
 
 
 @dataclass
@@ -71,7 +79,11 @@ class QlooClient:
             with self._client() as client:
                 response = client.get(path, params=clean, headers=self._headers())
         except httpx.HTTPError as exc:  # sieć / DNS / timeout
-            raise QlooError(f"Nie udało się połączyć z Qloo ({exc.__class__.__name__}).") from exc
+            raise QlooConnectionError(
+                f"Nie udało się połączyć z Qloo ({exc.__class__.__name__}). "
+                f"Sprawdź QLOO_BASE_URL — dla klucza hackathonowego musi to być "
+                "https://hackathon.api.qloo.com."
+            ) from exc
 
         if response.status_code == 401:
             raise QlooAuthError(
