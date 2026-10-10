@@ -64,6 +64,34 @@ def explainable(entity: dict, drivers: list[tuple[str, str, float]]) -> dict:
 TAG_MULTIVERSE = {"id": "urn:tag:keyword:media:multiverse", "name": "Multiverse", "type": "urn:tag:keyword:media"}
 TAG_DRAMA = {"id": "urn:tag:genre:media:drama", "name": "Drama", "type": "urn:tag:genre:media"}
 
+# Zapis parametrów, które faktycznie poleciały do API — pozwala testować
+# wysyłkę `filter.location.query`, a nie tylko to, co wróciło.
+SEEN: list[dict[str, str]] = []
+
+
+def place_entity(entity_id: str, name: str, *, city: str, country: str, affinity: float) -> dict:
+    """Miejsce (POI) w kształcie odpowiedzi Insights API — z geokodem w `properties`."""
+    return {
+        "name": name,
+        "entity_id": entity_id,
+        "type": "urn:entity",
+        "subtype": "urn:entity:place",
+        "properties": {
+            "description": "Kino studyjne z repertuarem autorskim.",
+            "geocode": {"name": city, "country_code": country, "metro": city},
+        },
+        "popularity": 0.64,
+        "tags": [{"id": "urn:tag:venue:cinema", "name": "Cinema", "type": "urn:tag:venue"}],
+        "query": {"affinity": affinity},
+    }
+
+
+@pytest.fixture(autouse=True)
+def _clear_seen():
+    SEEN.clear()
+    yield
+    SEEN.clear()
+
 
 @pytest.fixture
 def qloo_transport() -> httpx.MockTransport:
@@ -85,24 +113,35 @@ def qloo_transport() -> httpx.MockTransport:
             return httpx.Response(200, json={"results": [hit]})
 
         if path == "/v2/insights":
-            interest = params.get("signal.interests.entities", "")
             exclude = {x for x in params.get("filter.exclude.entities", "").split(",") if x}
-            entities = [
-                explainable(
-                    qloo_entity(
-                        "MOV-100",
-                        "Everything Everywhere All at Once",
-                        affinity=0.83,
-                        tags=[TAG_MULTIVERSE, TAG_DRAMA],
-                        image_url="https://images.qloo.com/mov-100.jpg",
+            filter_type = params.get("filter.type", "")
+            # Zapisujemy, co realnie poleciało — testy sprawdzają parametry, nie domysły.
+            SEEN.append(dict(params))
+
+            if filter_type == "urn:entity:place":
+                entities = [
+                    explainable(
+                        place_entity("PLC-100", "Kino Muza", city="Poznań", country="PL", affinity=0.79),
+                        [("MOV-001", "Amélie", 0.68)],
                     ),
-                    [("MOV-001", "Amélie", 0.71)],
-                ),
-                explainable(
-                    qloo_entity("ART-100", "DagaDana", subtype="urn:entity:artist", affinity=0.77, tags=[TAG_DRAMA]),
-                    [("ART-001", "Okean Elzy", 0.66)],
-                ),
-            ]
+                ]
+            else:
+                entities = [
+                    explainable(
+                        qloo_entity(
+                            "MOV-100",
+                            "Everything Everywhere All at Once",
+                            affinity=0.83,
+                            tags=[TAG_MULTIVERSE, TAG_DRAMA],
+                            image_url="https://images.qloo.com/mov-100.jpg",
+                        ),
+                        [("MOV-001", "Amélie", 0.71)],
+                    ),
+                    explainable(
+                        qloo_entity("ART-100", "DagaDana", subtype="urn:entity:artist", affinity=0.77, tags=[TAG_DRAMA]),
+                        [("ART-001", "Okean Elzy", 0.66)],
+                    ),
+                ]
             kept = [e for e in entities if e["entity_id"] not in exclude]
             return httpx.Response(200, json={"success": True, "results": {"entities": kept}})
 
@@ -197,6 +236,61 @@ def test_wykluczenie_uzywa_prawdziwego_entity_id(planner):
 
 
 # ------------------------------------------------------- nierozwiązana kotwica
+
+
+# ------------------------------------------------------- miejsca + lokalizacja
+#
+# To jest ścieżka, na której stoi cały pomysł: plan ma dotyczyć KONKRETNEGO
+# miasta. Filmy nie mają geokodu, więc doczepianie im miejscowości byłoby
+# parametrem nieobsługiwanym dla tego filter.type — czyli po cichu ignorowanym.
+
+
+def test_miejsca_dostaja_lokalizacje_filmy_nie(planner):
+    planner.build_plan(request(domains=["urn:entity:movie", "urn:entity:place"], destination="Poznań"))
+
+    by_type = {s["filter.type"]: s for s in SEEN}
+    assert by_type["urn:entity:place"]["filter.location.query"] == "Poznań"
+    assert "filter.location.query" not in by_type["urn:entity:movie"], (
+        "film nie ma geokodu — ten parametr byłby dla niego po cichu zignorowany"
+    )
+
+
+def test_adres_sklada_sie_z_geokodu(planner):
+    """Adres miejsca siedzi w `properties.geocode`, nie w polu `address`."""
+    plan = planner.build_plan(request(domains=["urn:entity:place"], destination="Poznań"))
+    place = plan.sections[0].items[0]
+    assert place.name == "Kino Muza"
+    assert "Poznań" in place.address
+    assert "PL" in place.address
+
+
+def test_miejsce_ma_powod_i_afinacje(planner):
+    plan = planner.build_plan(request(domains=["urn:entity:place"], destination="Poznań"))
+    place = plan.sections[0].items[0]
+    assert place.affinity == pytest.approx(0.79)
+    assert place.drivers[0].entity_name == "Amélie"
+    assert place.tags == ["Cinema"]
+
+
+def test_kazde_zapytanie_insights_ma_filter_type(planner):
+    planner.build_plan(request(domains=["urn:entity:movie", "urn:entity:place"]))
+    assert SEEN, "nie wysłano żadnego zapytania Insights"
+    for sent in SEEN:
+        assert sent.get("filter.type"), "zapytanie bez wymaganego filter.type"
+        assert sent.get("feature.explainability") == "true"
+
+
+def test_brak_nieudokumentowanych_parametrow(planner):
+    """Przewodnik: parametr spoza dokumentacji jest po cichu ignorowany.
+
+    Pilnujemy, żeby do zapytania nie wróciły zmyślone nazwy, które kiedyś
+    usuwaliśmy (`size`, `filter.results_per_page`).
+    """
+    planner.build_plan(request(domains=["urn:entity:movie", "urn:entity:place"]))
+    zabronione = {"size", "filter.results_per_page", "results_per_page"}
+    for sent in SEEN:
+        nadmiarowe = zabronione & set(sent)
+        assert not nadmiarowe, f"wysłano nieudokumentowane parametry: {sorted(nadmiarowe)}"
 
 
 def test_nierozwiazana_kotwica(qloo_transport):
