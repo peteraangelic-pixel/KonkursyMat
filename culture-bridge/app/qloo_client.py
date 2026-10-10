@@ -48,7 +48,7 @@ class QlooClient:
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": self.settings.qloo_api_key, "Accept": "application/json"}
 
-    def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _get(self, path: str, params: dict[str, Any], allow_empty_on_404: bool = False) -> dict[str, Any]:
         """Wykonuje GET, mapując udokumentowane kody błędów na czytelne komunikaty."""
         clean = {k: v for k, v in params.items() if v not in (None, "", [], {})}
         cache_key = f"{path}?{sorted(clean.items())}"
@@ -72,6 +72,10 @@ class QlooClient:
                 "403 Forbidden. Ten typ encji nie jest objęty Twoim kluczem "
                 "(np. muzyka to 'urn:entity:artist', nie 'urn:entity:music')."
             )
+        if response.status_code == 404 and allow_empty_on_404:
+            # /search dokumentuje 404 jako „No results” — to normalny wynik,
+            # nie awaria. Zwracamy pusty zestaw zamiast rzucać wyjątkiem.
+            return {"results": []}
         if response.status_code >= 400:
             detail = response.text[:300]
             raise QlooError(f"Qloo zwróciło {response.status_code}: {detail}")
@@ -86,21 +90,30 @@ class QlooClient:
 
     # ------------------------------------------------------------- wyszukiwanie
 
-    def search_entities(self, query: str, types: list[str] | None = None, size: int = 5) -> list[dict[str, Any]]:
+    def search_entities(self, query: str, types: list[str] | None = None, take: int = 5) -> list[dict[str, Any]]:
         """Rozwiązuje nazwę („Sting”, „Barszcz”) na identyfikator encji Qloo.
 
-        ``/search`` akceptuje inny zbiór typów niż ``filter.type`` w Insights,
-        więc nie wolno ich mieszać.
+        Dwie rzeczy z dokumentacji ``/search``, na które tu uważamy:
+          * rozmiar wyniku to ``take``, nie ``size`` — parametr spoza dokumentacji
+            zostałby po cichu zignorowany,
+          * ``404`` znaczy „No results”, nie awarię.
+
+        ``/search`` akceptuje też inny zbiór typów niż ``filter.type`` w Insights
+        (m.in. ``urn:entity:locality``, ``urn:entity:actor``), więc nie wolno ich mieszać.
         """
-        params: dict[str, Any] = {"query": query, "size": size}
+        params: dict[str, Any] = {"query": query, "take": max(1, int(take)), "sort_by": "match"}
         if types:
             params["types"] = ",".join(types)
-        payload = self._get("/search", params)
+        payload = self._get("/search", params, allow_empty_on_404=True)
         return payload.get("results", []) or []
 
-    def search_tags(self, query: str, size: int = 5) -> list[dict[str, Any]]:
+    def search_tags(self, query: str, take: int = 5) -> list[dict[str, Any]]:
         """Znajduje poprawne identyfikatory tagów — ``filter.tags`` nie przyjmuje wolnego tekstu."""
-        payload = self._get("/v2/tags", {"query": query, "size": size})
+        payload = self._get(
+            "/v2/tags",
+            {"query": query, "take": max(1, int(take))},
+            allow_empty_on_404=True,
+        )
         return payload.get("results", []) or []
 
     # --------------------------------------------------------------- insights
@@ -152,11 +165,11 @@ class QlooClient:
         if extra:
             params.update({k: v for k, v in extra.items() if v not in (None, "", [])})
 
-        # UWAGA: w dokumentacji Insights API nie ma parametru rozmiaru strony
-        # (są tylko `page` i `offset`), a przewodnik ostrzega, że nieobsługiwane
-        # parametry są po cichu ignorowane i skutkują pustym wynikiem bez błędu.
-        # Dlatego nie wysyłamy nic takiego — przycinamy wynik po swojej stronie.
-        self.page_size = max(1, min(int(results_per_page), 20))
+        # Rozmiar wyniku to udokumentowany `take` (1–50, domyślnie 20), a paginacja
+        # idzie przez `page`. Pilnujemy granic, bo przewodnik ostrzega, że parametr
+        # spoza dokumentacji jest po cichu ignorowany i daje pusty wynik bez błędu.
+        self.page_size = max(1, min(int(results_per_page), 50))
+        params["take"] = self.page_size
         return self._get("/v2/insights", params)
 
     # ------------------------------------------------------------- interpretacja

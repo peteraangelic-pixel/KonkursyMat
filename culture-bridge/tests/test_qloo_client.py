@@ -94,18 +94,23 @@ def test_puste_parametry_nie_sa_wysylane():
     assert "filter.location.query" not in params
 
 
-def test_nie_wysylamy_nieudokumentowanego_parametru_rozmiaru_strony():
-    """Przewodnik ostrzega: nieobsługiwane parametry są ignorowane i dają pusty wynik.
-
-    Insights API nie ma parametru rozmiaru strony, więc klient nie może go zmyślić.
-    """
+def test_rozmiar_wyniku_idzie_przez_udokumentowany_take():
+    """Insights API ma `take` (1–50). Wcześniej wysyłaliśmy zmyślony
+    `filter.results_per_page`, który API po cichu by zignorowało."""
     client = make_client(echo_handler)
     payload = client.insights("urn:entity:movie", results_per_page=6)
     params = payload["_seen_params"]
+    assert params["take"] == "6"
     assert "filter.results_per_page" not in params
     assert "results_per_page" not in params
-    # cięcie odbywa się po naszej stronie
     assert client.page_size == 6
+
+
+def test_take_jest_przycinany_do_dokumentowanych_granic():
+    """Dokumentacja: `take` to 1–50. Wartość spoza zakresu nie może wyjść na zewnątrz."""
+    client = make_client(echo_handler)
+    assert client.insights("urn:entity:movie", results_per_page=999)["_seen_params"]["take"] == "50"
+    assert client.insights("urn:entity:movie", results_per_page=0)["_seen_params"]["take"] == "1"
 
 
 def test_search_i_tags_uzywaja_osobnych_sciezek():
@@ -114,6 +119,37 @@ def test_search_i_tags_uzywaja_osobnych_sciezek():
     assert search == []
     tags = client.search_tags("cuisine")
     assert tags == []
+
+
+def test_search_zwraca_pusta_liste_przy_404():
+    """/search dokumentuje 404 jako „No results” — to wynik, nie awaria."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": "No results"})
+
+    client = make_client(handler)
+    assert client.search_entities("nie ma takiego") == []
+    assert client.search_tags("nie ma takiego") == []
+
+
+def test_search_przekazuje_parametry_z_dokumentacji():
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        seen["_path"] = request.url.path
+        return httpx.Response(200, json={"results": [{"id": "e1", "name": "Sting"}]})
+
+    client = make_client(handler)
+    result = client.search_entities("Sting", types=["urn:entity:artist"], take=3)
+
+    assert result == [{"id": "e1", "name": "Sting"}]
+    assert seen["_path"] == "/search"
+    assert seen["query"] == "Sting"
+    assert seen["take"] == "3"
+    assert seen["sort_by"] == "match"
+    assert seen["types"] == "urn:entity:artist"
+    assert "size" not in seen
 
 
 # ------------------------------------------------------------- mapowanie błędów
