@@ -132,6 +132,30 @@ def test_search_zwraca_pusta_liste_przy_404():
     assert client.search_tags("nie ma takiego") == []
 
 
+def test_tags_wysyla_wylacznie_zweryfikowany_query():
+    """Strona referencyjna /v2/tags zwraca 404, więc nie znamy jej parametrów.
+
+    Wysyłamy tylko `query` — istnienie endpointu potwierdza przewodnik
+    hackathonowy, reszty nie zgadujemy. Parametr spoza dokumentacji API
+    ignoruje po cichu, więc zmyślony `take` nic by nie dał, a udawałby działanie.
+    """
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        seen["_path"] = request.url.path
+        return httpx.Response(200, json={"results": [{"id": "urn:tag:cuisine:polish"}]})
+
+    client = make_client(handler)
+    result = client.search_tags("cuisine")
+
+    assert result == [{"id": "urn:tag:cuisine:polish"}]
+    assert seen["_path"] == "/v2/tags"
+    assert seen == {"_path": "/v2/tags", "query": "cuisine"}, (
+        f"wysłano niezweryfikowane parametry: {sorted(k for k in seen if k != '_path')}"
+    )
+
+
 def test_search_przekazuje_parametry_z_dokumentacji():
     seen: dict[str, str] = {}
 

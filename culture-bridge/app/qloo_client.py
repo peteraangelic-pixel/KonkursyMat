@@ -107,13 +107,19 @@ class QlooClient:
         payload = self._get("/search", params, allow_empty_on_404=True)
         return payload.get("results", []) or []
 
-    def search_tags(self, query: str, take: int = 5) -> list[dict[str, Any]]:
-        """Znajduje poprawne identyfikatory tagów — ``filter.tags`` nie przyjmuje wolnego tekstu."""
-        payload = self._get(
-            "/v2/tags",
-            {"query": query, "take": max(1, int(take))},
-            allow_empty_on_404=True,
-        )
+    def search_tags(self, query: str) -> list[dict[str, Any]]:
+        """Znajduje poprawne identyfikatory tagów — ``filter.tags`` nie przyjmuje wolnego tekstu.
+
+        Wysyłamy WYŁĄCZNIE ``query``. Istnienie tego endpointu i jego przeznaczenie
+        potwierdza przewodnik hackathonowy, ale jego strona referencyjna zwraca 404,
+        więc nie znamy reszty parametrów. Wcześniej był tu ``take`` przepisany
+        z ``/search`` — a przewodnik ostrzega, że parametr spoza dokumentacji jest
+        po cichu ignorowany. Lepiej nie wysyłać nic niezweryfikowanego.
+
+        Metoda nie jest na razie używana przez planer; zostaje jako potwierdzone
+        w dokumentacji wejście do rozszerzenia o sygnały tagowe.
+        """
+        payload = self._get("/v2/tags", {"query": query}, allow_empty_on_404=True)
         return payload.get("results", []) or []
 
     # --------------------------------------------------------------- insights
