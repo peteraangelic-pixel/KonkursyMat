@@ -8,7 +8,8 @@ Katalog [`culture-bridge/`](culture-bridge/) — zgłoszenie do **Qloo Agentic
 Hackathon**. To tutaj jest działająca aplikacja i jej testy.
 
 - **README z instrukcją uruchomienia:** [`culture-bridge/README.md`](culture-bridge/README.md)
-- **Konfiguracja deployu:** `Procfile` + `render.yaml` (Render, plan darmowy)
+- **Konfiguracja deployu:** `render.yaml` w korzeniu repo (Render, plan darmowy)
+  + `culture-bridge/Procfile`
 - **Licencja:** MIT, w korzeniu i w `culture-bridge/`
 
 Co robi aplikacja: osoba przyjeżdżająca do nowego miasta podaje kilka rzeczy,

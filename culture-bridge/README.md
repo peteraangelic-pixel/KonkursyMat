@@ -149,6 +149,17 @@ Wystarczy cokolwiek, co uruchomi Uvicorna i pozwala ustawić `QLOO_API_KEY`
 jako zmienną środowiskową — Render, Fly.io, Railway. Klucz nie może trafić
 do kodu frontendu, bo trafiłby do przeglądarki.
 
+### Render
+
+Blueprint **`render.yaml` leży w korzeniu repo**, nie tutaj. Render szuka tego
+pliku w katalogu głównym, a komendy `buildCommand` / `startCommand` wykonuje
+względem niego — dlatego usługa ma ustawione `rootDir: culture-bridge`. Bez
+tego pola build szukałby `requirements.txt` i pakietu `app` w korzeniu, gdzie
+ich nie ma.
+
+Po utworzeniu usługi ustaw w panelu `QLOO_API_KEY` — bez niej aplikacja ruszy
+w trybie demo i pokaże o tym baner.
+
 ## Lista przed zgłoszeniem
 
 - [ ] `QLOO_API_KEY` ustawiony na hostingu, baner demo znika
