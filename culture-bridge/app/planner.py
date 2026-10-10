@@ -34,6 +34,7 @@ from .models import (
     PlanRequest,
     Recommendation,
 )
+from .narrator import DeterministicNarrator, Narrator
 from .provider import TasteProvider
 from .qloo_client import QlooError
 
@@ -58,9 +59,14 @@ def _shorten(text: str, limit: int = 260) -> str:
 
 
 class Planner:
-    def __init__(self, provider: TasteProvider, source: str) -> None:
+    def __init__(
+        self, provider: TasteProvider, source: str, narrator: Narrator | None = None
+    ) -> None:
         self.provider = provider
         self.source = source
+        # Narrator jest wstrzykiwany, więc planer nie wie, czy zdanie podsumowujące
+        # powstało deterministycznie, czy przez model — i nie musi wiedzieć.
+        self.narrator: Narrator = narrator or DeterministicNarrator()
 
     # ------------------------------------------------------------- 1. resolve
 
@@ -208,7 +214,12 @@ class Planner:
             sections.append(DomainSection(domain=domain, label=label, items=recs, note=note))
 
         weeks = self._build_weeks(sections)
-        narrative = self._narrative(request, resolved, sections)
+        narrative = self.narrator.narrate(
+            origin=request.origin,
+            destination=request.destination,
+            anchors=resolved,
+            sections=sections,
+        )
 
         if self.source == "demo":
             warnings.insert(
@@ -228,17 +239,4 @@ class Planner:
             warnings=warnings,
         )
 
-    # -------------------------------------------------------------- narracja
 
-    def _narrative(
-        self, request: PlanRequest, anchors: list[Anchor], sections: list[DomainSection]
-    ) -> str:
-        found = sum(len(s.items) for s in sections)
-        names = [a.name for a in anchors if a.resolved][:3]
-        anchor_part = ", ".join(names) if names else "podanych przez Ciebie kotwic"
-        return (
-            f"Zaczynamy od tego, co już lubisz ({anchor_part}), i szukamy najbliższych "
-            f"odpowiedników w: {request.destination}. Zamiast generycznej listy "
-            f"„co zobaczyć w {request.destination}”, każda pozycja wynika z Twojego smaku — "
-            f"i ma dopisane, dlaczego. Znalezionych pozycji: {found}."
-        )

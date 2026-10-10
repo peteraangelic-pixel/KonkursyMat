@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import load_settings
 from .models import LandingPlan, PlanRequest
+from .narrator import build_narrator
 from .planner import DOMAIN_LABELS, Planner
 from .provider import build_provider
 from .qloo_client import QlooError
@@ -37,12 +38,14 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/api/health")
 def health() -> dict[str, object]:
     settings = load_settings()
+    _, llm_active = build_narrator(settings)
     return {
         "status": "ok",
         "qloo_connected": settings.qloo_enabled,
         "data_source": "qloo" if settings.qloo_enabled else "demo",
         "qloo_base_url": settings.qloo_base_url,
-        "llm_enabled": settings.llm_enabled,
+        # Raportujemy to, co faktycznie zbudowano — nie samą obecność klucza.
+        "llm_enabled": llm_active,
     }
 
 
@@ -60,7 +63,8 @@ def domains() -> dict[str, list[dict[str, str]]]:
 def create_plan(request: PlanRequest) -> LandingPlan:
     settings = load_settings()
     provider, source = build_provider(settings)
-    planner = Planner(provider, source)
+    narrator, _ = build_narrator(settings)
+    planner = Planner(provider, source, narrator=narrator)
 
     if not request.anchors:
         raise HTTPException(

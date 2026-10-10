@@ -86,6 +86,9 @@ Testy przechodzą przez prawdziwy kod, nie przez jego kopię:
   (w tym mapowanie 401/403 na czytelne komunikaty), cache, parsowanie odpowiedzi,
 - `test_planner.py` — cztery kroki pętli agenta, w tym regresja na przypisywanie
   kotwic, których użytkownik nie podał,
+- `test_narrator.py` — warstwa narracji: domyślna ścieżka bez klucza oraz powrót
+  do wersji deterministycznej przy awarii modelu (HTTP 500, puste `choices`,
+  nieznany kształt odpowiedzi, błąd sieci, pusty tekst),
 - `test_api.py` — pełna ścieżka HTTP: żądanie → planer → odpowiedź.
 
 ## Struktura
@@ -96,11 +99,27 @@ app/
   models.py       schematy (Anchor, PlanRequest, LandingPlan, Recommendation)
   qloo_client.py  klient Insights API + mapowanie udokumentowanych błędów
   provider.py     protokół dostawcy: QlooClient | DemoProvider
+  narrator.py     zdanie podsumowujące: deterministycznie lub przez model
   planner.py      pętla agenta (resolve → fan-out → compose → refine)
   main.py         FastAPI
 static/           frontend bez etapu budowania
 tests/
 ```
+
+### Warstwa narracji
+
+Podsumowanie planu powstaje w osobnej warstwie:
+
+- **domyślnie deterministycznie** — bez żadnego klucza API, aplikacja działa
+  na czystej maszynie,
+- **opcjonalnie przez model** — gdy ustawisz `LLM_API_KEY` **i** `LLM_PROVIDER`.
+  Sam klucz nie wystarczy, więc przypadkowo wklejony sekret nie zmienia
+  zachowania aplikacji.
+
+Każda awaria warstwy językowej (sieć, limit, nieznany kształt odpowiedzi,
+pusty tekst) kończy się powrotem do narracji deterministycznej — jest ozdobą,
+nie fundamentem. `/api/health` raportuje `llm_enabled` na podstawie tego,
+który narrator faktycznie zbudowano, a nie samej obecności klucza w środowisku.
 
 Frontend celowo nie ma etapu budowania: konkurs wymaga hostowanego, działającego
 demo, a im mniej kroków do uruchomienia, tym mniej rzeczy może się zepsuć.
