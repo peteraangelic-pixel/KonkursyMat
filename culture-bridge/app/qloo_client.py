@@ -27,13 +27,24 @@ class QlooError(RuntimeError):
     """Błąd wywołania Qloo z komunikatem zrozumiałym dla człowieka."""
 
 
+class QlooAuthError(QlooError):
+    """Błąd konfiguracji (401/403), którego nie naprawi próba innej domeny.
+
+    Planer połyka ``QlooError`` dla pojedynczej domeny, bo pusty lub odrzucony
+    wynik jednej domeny nie unieważnia pozostałych. Ale 401/403 dotyczy KAŻDEGO
+    zapytania — zły klucz albo zły ``QLOO_BASE_URL``. Połknięty dałby użytkownikowi
+    pusty plan bez przyczyny, co wygląda identycznie jak „brak danych dla tego
+    miasta". Dlatego ten wyjątek przerywa plan i wychodzi na zewnątrz jako 502.
+    """
+
+
 @dataclass
 class QlooClient:
     settings: Settings
     _cache: dict[str, tuple[float, dict[str, Any]]] = field(default_factory=dict)
     _transport: httpx.BaseTransport | None = None
-    #: Rozmiar, do którego wywołujący chce przyciąć wynik. Insights API nie ma
-    #: parametru rozmiaru strony, więc cięcie odbywa się po naszej stronie.
+    #: Rozmiar strony wysyłany do Insights API. Jest to udokumentowany parametr
+    #: ``take`` (1–50, domyślnie 20) — patrz ``insights()`` poniżej.
     page_size: int = 6
 
     # ------------------------------------------------------------------ infra
@@ -63,12 +74,12 @@ class QlooClient:
             raise QlooError(f"Nie udało się połączyć z Qloo ({exc.__class__.__name__}).") from exc
 
         if response.status_code == 401:
-            raise QlooError(
+            raise QlooAuthError(
                 "401 Unauthorized. Klucz hackathonowy działa wyłącznie z "
                 "https://hackathon.api.qloo.com — sprawdź QLOO_BASE_URL i QLOO_API_KEY."
             )
         if response.status_code == 403:
-            raise QlooError(
+            raise QlooAuthError(
                 "403 Forbidden. Ten typ encji nie jest objęty Twoim kluczem "
                 "(np. muzyka to 'urn:entity:artist', nie 'urn:entity:music')."
             )

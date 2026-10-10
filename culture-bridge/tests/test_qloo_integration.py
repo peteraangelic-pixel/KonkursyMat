@@ -293,6 +293,100 @@ def test_brak_nieudokumentowanych_parametrow(planner):
         assert not nadmiarowe, f"wysłano nieudokumentowane parametry: {sorted(nadmiarowe)}"
 
 
+# --------------------------------------------------- pelna sciezka HTTP + Qloo
+#
+# Testy powyżej wołają planer bezpośrednio. Ten sprawdza to, co naprawdę
+# dostaje przeglądarka: żądanie HTTP → create_plan() → build_provider() →
+# QlooClient → serializacja LandingPlan. To ostatnia warstwa, która uruchamia
+# się wyłącznie z prawdziwym kluczem — a oba znalezione tu bugi były właśnie
+# w kodzie działającym tylko wtedy.
+
+
+@pytest.fixture
+def http_z_qloo(qloo_transport, monkeypatch):
+    """Podmienia build_provider w module main na klienta Qloo z udawanym API."""
+    from fastapi.testclient import TestClient
+
+    from app import main as main_module
+
+    settings = Settings(qloo_api_key="test-key", qloo_base_url=BASE)
+    client = QlooClient(settings=settings, _transport=qloo_transport)
+    monkeypatch.setattr(main_module, "build_provider", lambda _s: (client, "qloo"))
+    monkeypatch.setenv("QLOO_API_KEY", "test-key")
+    return TestClient(main_module.app)
+
+
+def test_api_plan_z_dostawca_qloo(http_z_qloo):
+    response = http_z_qloo.post(
+        "/api/plan",
+        json={
+            "origin": "Ukraina (Lwów)",
+            "destination": "Poznań",
+            "anchors": [{"name": "Okean Elzy", "kind": "artist"}, {"name": "Amélie", "kind": "movie"}],
+            "domains": ["urn:entity:movie"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    plan = response.json()
+
+    assert plan["data_source"] == "qloo", "z kluczem plan musi być oznaczony jako qloo"
+    assert not plan["warnings"], f"nieoczekiwane ostrzeżenia: {plan['warnings']}"
+
+    item = plan["sections"][0]["items"][0]
+    # Te pola frontend wyświetla — gdyby serializacja je zgubiła, UI byłoby puste.
+    assert item["qloo_id"] == "MOV-100"
+    assert item["tags"] == ["Multiverse", "Drama"]
+    assert item["image"] == "https://images.qloo.com/mov-100.jpg"
+    assert item["drivers"][0]["entity_name"] == "Amélie"
+    assert 0 < item["drivers"][0]["score"] <= 1
+    assert item["why"]
+
+
+def test_api_plan_z_qloo_przekazuje_wykluczenie(http_z_qloo):
+    """Przycisk „to nie to" musi dojść aż do API, nie zostać w przeglądarce."""
+    body = {
+        "origin": "Ukraina (Lwów)",
+        "destination": "Poznań",
+        "anchors": [{"name": "Okean Elzy", "kind": "artist"}, {"name": "Amélie", "kind": "movie"}],
+        "domains": ["urn:entity:movie"],
+    }
+    before = http_z_qloo.post("/api/plan", json=body).json()
+    ids_before = [i["qloo_id"] for s in before["sections"] for i in s["items"]]
+    assert "MOV-100" in ids_before
+
+    body["exclude_entities"] = ["MOV-100"]
+    after = http_z_qloo.post("/api/plan", json=body).json()
+    ids_after = [i["qloo_id"] for s in after["sections"] for i in s["items"]]
+    assert "MOV-100" not in ids_after
+
+
+def test_api_plan_z_qloo_zglasza_bled_qloo_jako_502(qloo_transport, monkeypatch):
+    """Awaria Qloo ma dać czytelny 502, nie pusty ekran ani 500."""
+    from fastapi.testclient import TestClient
+
+    from app import main as main_module
+
+    def failing(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"message": "Invalid API key"})
+
+    settings = Settings(qloo_api_key="zly-klucz", qloo_base_url=BASE)
+    client = QlooClient(settings=settings, _transport=httpx.MockTransport(failing))
+    monkeypatch.setattr(main_module, "build_provider", lambda _s: (client, "qloo"))
+    monkeypatch.setenv("QLOO_API_KEY", "zly-klucz")
+
+    response = TestClient(main_module.app).post(
+        "/api/plan",
+        json={
+            "origin": "Ukraina",
+            "destination": "Poznań",
+            "anchors": [{"name": "Okean Elzy", "kind": "artist"}],
+            "domains": ["urn:entity:movie"],
+        },
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"]
+
+
 def test_nierozwiazana_kotwica(qloo_transport):
     """Kotwica, której /search nie znajduje (404), nie może wywalić planu."""
     settings = Settings(qloo_api_key="test-key", qloo_base_url=BASE)
