@@ -1,0 +1,11 @@
+# Klucze API — nigdy do repo. QLOO_API_KEY idzie przez zmienną środowiskową hostingu.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
