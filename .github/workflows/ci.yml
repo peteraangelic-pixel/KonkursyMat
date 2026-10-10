@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "arena/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Testy (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 to wersja zdeployowana na Renderze (PYTHON_VERSION w render.yaml).
+        # 3.12 pilnuje, żeby kod nie zaległ się na jednej wersji.
+        python-version: ["3.11", "3.12"]
+
+    defaults:
+      run:
+        working-directory: culture-bridge
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: culture-bridge/requirements.txt
+
+      - name: Zależności
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Testy
+        run: python -m pytest tests/ -q
+
+      # Aplikacja musi dać się uruchomić i odpowiedzieć na health check —
+      # dokładnie to sprawdza Render po starcie (healthCheckPath w render.yaml).
+      - name: Smoke test serwera
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8123 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8123/api/health > /dev/null; then
+              echo "health check OK"
+              curl -s http://127.0.0.1:8123/api/health
+              echo
+              kill $SERVER_PID
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "serwer nie odpowiedział w 30 s"
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1

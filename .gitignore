@@ -1,0 +1,23 @@
+# Środowisko wirtualne — nigdy do repo
+.venv/
+venv/
+env/
+
+# Artefakty narzędzi
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+node_modules/
+
+# Klucze i sekrety
+.env
+.env.*
+!.env.example
+
+.DS_Store

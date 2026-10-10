@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smak Domu — kulturowy plan lądowania</title>
+<meta name="description" content="Agentowy plan pierwszych 30 dni w nowym kraju, oparty na afinacjach smaku z Qloo.">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="logo">◍</span>
+      <div>
+        <h1>Smak Domu</h1>
+        <p class="tagline">Kulturowy plan lądowania. Od tego, co już lubisz — do tego, co polubisz tutaj.</p>
+      </div>
+    </div>
+    <div id="source-badge" class="badge badge-unknown">sprawdzam źródło danych…</div>
+  </div>
+</header>
+
+<div id="demo-banner" class="banner" hidden>
+  <strong>Tryb demo.</strong> Brak <code>QLOO_API_KEY</code> — poniższe propozycje to
+  fixture'y, nie dane Qloo. Służą wyłącznie do pokazania działania aplikacji.
+</div>
+
+<main class="wrap grid">
+  <section class="card panel-form">
+    <h2>Skąd i dokąd</h2>
+
+    <label for="origin">Skąd przyjeżdżasz</label>
+    <input id="origin" type="text" value="Ukraina (Lwów)" autocomplete="off">
+
+    <label for="destination">Dokąd</label>
+    <input id="destination" type="text" value="Poznań" autocomplete="off">
+
+    <label for="age">Przedział wieku <span class="hint">(opcjonalnie)</span></label>
+    <select id="age">
+      <option value="">— bez wpływu —</option>
+      <option value="24_and_younger">24 i mniej</option>
+      <option value="25_to_29">25–29</option>
+      <option value="30_to_34">30–34</option>
+      <option value="35_to_44">35–44</option>
+      <option value="45_to_54">45–54</option>
+      <option value="55_and_older">55 i więcej</option>
+    </select>
+
+    <h2>Kotwice smakowe</h2>
+    <p class="hint">To, co już kochasz u siebie. Z tego liczymy podobieństwo — nie z listy przebojów.</p>
+    <div id="anchors"></div>
+    <button id="add-anchor" type="button" class="btn ghost">+ dodaj kotwicę</button>
+
+    <h2>Zakres planu</h2>
+    <div id="domains" class="chips"></div>
+
+    <div class="actions">
+      <button id="go" type="button" class="btn primary">Ułóż plan</button>
+      <span id="status" class="status" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section class="panel-result">
+    <div id="empty" class="card empty">
+      <p>Wypełnij formularz i ułóż plan.</p>
+      <p class="hint">Każda propozycja będzie miała dopisane <em>dlaczego</em> —
+        która z Twoich kotwic i z jaką siłą ją pociągnęła.</p>
+    </div>
+
+    <div id="plan" hidden>
+      <div class="card">
+        <h2 id="plan-title"></h2>
+        <p id="narrative" class="narrative"></p>
+        <div id="warnings"></div>
+        <p id="meta" class="meta"></p>
+      </div>
+
+      <div id="weeks"></div>
+      <div id="sections"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>
+    Zbudowane na <a href="https://qloo.com" rel="noopener">Qloo</a> Insights API
+    (<code>feature.explainability</code>). Bez afinacji smaku to byłaby zwykła lista przebojów.
+  </p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Blueprint Rendera — pozwala postawić demo jednym kliknięciem.
+# Konkurs wymaga: „Your demo must be hosted and fully published externally".
+#
+# Po utworzeniu usługi USTAW w panelu Rendera zmienną QLOO_API_KEY.
+# Bez niej aplikacja ruszy w trybie DEMO (fixture'y) i pokaże o tym baner —
+# przed zgłoszeniem baner musi zniknąć.
+
+services:
+  - type: web
+    name: smak-domu
+    runtime: python
+    plan: free
+    # Aplikacja mieszka w podkatalogu, a komendy builda wykonują się względem
+    # korzenia repo. Bez rootDir Render szukałby requirements.txt i pakietu
+    # 'app' w korzeniu — a tam ich nie ma, więc build i start by padły.
+    rootDir: culture-bridge
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: QLOO_API_KEY
+        sync: false          # wpisz ręcznie — sekret nie może trafić do repo
+      - key: QLOO_BASE_URL
+        value: https://hackathon.api.qloo.com
+      - key: LLM_PROVIDER
+        value: none
+      - key: PYTHON_VERSION
+        value: 3.11.2
