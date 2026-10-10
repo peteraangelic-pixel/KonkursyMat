@@ -163,11 +163,28 @@ w trybie demo i pokaże o tym baner.
 ## Lista przed zgłoszeniem
 
 - [ ] `QLOO_API_KEY` ustawiony na hostingu, baner demo znika
-- [ ] repo publiczne, licencja MIT widoczna w sekcji **About**
+- [x] repo publiczne, licencja MIT widoczna w sekcji **About** *(GitHub wykrywa MIT od merge'a `78dfbea`)*
 - [ ] demo dostępne pod publicznym URL, bez logowania
 - [ ] sprawdzone na prawdziwych kotwicach i prawdziwym mieście
-- [ ] opis zgłoszenia wyjaśnia, co jest „Qloo-powered”
-- [ ] wideo demo **nie jest wymagane** w tym konkursie
+- [x] opis zgłoszenia wyjaśnia, co jest „Qloo-powered” *(zobacz [SUBMISSION.md](SUBMISSION.md))*
+- [x] wideo demo **nie jest wymagane** w tym konkursie
+
+### Wypłata nagrody z Polski (bez firmy)
+
+Zweryfikowane w regulaminie i dokumentacji Devpost:
+
+- Konkurs jest otwarty dla **osób fizycznych** („Individuals who are at least
+  the age of majority where they reside"). Firma nie jest wymagana.
+- **Polska nie jest wykluczona.** Wyłączone są m.in. Brazylia, Quebec, Rosja,
+  Krym, Kuba, Iran i Korea Płn.
+- Zwycięzca spoza USA odbierający nagrodę **jako osoba fizyczna** składa
+  formularz **W-8BEN** (organizacje składają W-8BEN-E). Formularz podatkowy
+  jest warunkiem wypłaty.
+
+Do potwierdzenia samodzielnie, bo tego nie zweryfikowałem: dokładna stawka
+potrącenia u źródła dla dochodu z nagrody (obowiązuje konwencja
+polsko-amerykańska z 8.10.1974, ale konkretnej stawki dla nagród nie
+sprawdziłem) oraz rozliczenie po polskiej stronie — warto z księgowym.
 
 ## Licencja
 
