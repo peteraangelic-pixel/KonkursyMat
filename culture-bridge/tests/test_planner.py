@@ -20,7 +20,7 @@ class FakeProvider:
         self.fail_on = fail_on or set()
         self.empty_for = empty_for or set()
 
-    def search_entities(self, query: str, types=None, size: int = 5):
+    def search_entities(self, query: str, types=None, take: int = 5):
         self.calls.append({"op": "search", "query": query, "types": types})
         table = {
             "Okean Elzy": {"id": "artist-1", "type": "urn:entity:artist"},

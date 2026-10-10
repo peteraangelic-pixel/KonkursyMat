@@ -24,7 +24,7 @@ from .qloo_client import QlooClient
 class TasteProvider(Protocol):
     """Minimalny kontrakt, jakiego potrzebuje planer."""
 
-    def search_entities(self, query: str, types: list[str] | None = None, size: int = 5) -> list[dict[str, Any]]: ...
+    def search_entities(self, query: str, types: list[str] | None = None, take: int = 5) -> list[dict[str, Any]]: ...
 
     def insights(self, filter_type: str, **kwargs: Any) -> dict[str, Any]: ...
 
@@ -213,7 +213,7 @@ class DemoProvider:
 
     page_size: int = 6
 
-    def search_entities(self, query: str, types: list[str] | None = None, size: int = 5) -> list[dict[str, Any]]:
+    def search_entities(self, query: str, types: list[str] | None = None, take: int = 5) -> list[dict[str, Any]]:
         hit = _DEMO_ANCHORS.get(_normalize(query))
         if not hit:
             return []

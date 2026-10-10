@@ -83,14 +83,18 @@ class Planner:
             search_types = ["urn:entity:movie", "urn:entity:tv_show"]
 
         try:
-            hits = self.provider.search_entities(anchor.name, types=search_types, size=3)
+            hits = self.provider.search_entities(anchor.name, types=search_types, take=3)
         except QlooError:
             return anchor
 
         if hits:
             top = hits[0]
-            anchor.qloo_id = str(top.get("id") or top.get("_id") or "")
-            anchor.qloo_type = str(top.get("type") or "")
+            # Qloo zwraca `entity_id`, nie `id` — ten sam rozjazd, który naprawiliśmy
+            # w kliencie dla wyników Insights. Bez tego każda kotwica zostawała
+            # nierozwiązana, a plan powstawał bez żadnego sygnału.
+            anchor.qloo_id = str(top.get("entity_id") or top.get("id") or top.get("_id") or "")
+            # `type` w odpowiedzi Qloo to ogólne "urn:entity"; konkretny typ jest w `subtype`.
+            anchor.qloo_type = str(top.get("subtype") or top.get("type") or "")
             anchor.resolved = bool(anchor.qloo_id)
         return anchor
 
